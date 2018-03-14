@@ -16,12 +16,10 @@
 
 package kotlinx.coroutines.experimental.channels
 
-import kotlinx.atomicfu.atomic
-import kotlinx.atomicfu.loop
-import kotlinx.coroutines.experimental.internal.Symbol
-import kotlinx.coroutines.experimental.intrinsics.startCoroutineUndispatched
-import kotlinx.coroutines.experimental.selects.SelectClause2
-import kotlinx.coroutines.experimental.selects.SelectInstance
+import kotlinx.atomicfu.*
+import kotlinx.coroutines.experimental.internal.*
+import kotlinx.coroutines.experimental.intrinsics.*
+import kotlinx.coroutines.experimental.selects.*
 
 /**
  * Broadcasts the most recently sent element (aka [value]) to all [openSubscription] subscribers.
@@ -111,12 +109,12 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
         }
     }
 
-    override val isClosedForSend: Boolean get() = _state.value is Closed
-    override val isFull: Boolean get() = false
+    public override val isClosedForSend: Boolean get() = _state.value is Closed
+    public override val isFull: Boolean get() = false
 
     @Suppress("UNCHECKED_CAST")
-    override fun openSubscription(): SubscriptionReceiveChannel<E> {
-        val subscriber = Subscriber<E>(this)
+    public override fun openSubscription(): SubscriptionReceiveChannel<E> {
+        val subscriber = Subscriber(this)
         _state.loop { state ->
             when (state) {
                 is Closed -> {
@@ -151,7 +149,7 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
     }
 
     private fun addSubscriber(list: Array<Subscriber<E>>?, subscriber: Subscriber<E>): Array<Subscriber<E>> {
-        if (list == null) return Array<Subscriber<E>>(1) { subscriber }
+        if (list == null) return Array(1) { subscriber }
         return list + subscriber
     }
 
@@ -168,7 +166,7 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun close(cause: Throwable?): Boolean {
+    public override fun close(cause: Throwable?): Boolean {
         _state.loop { state ->
             when (state) {
                 is Closed -> return false
@@ -185,11 +183,16 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
     }
 
     /**
+     * Closes this broadcast channel. Same as [close].
+     */
+    public override fun cancel(cause: Throwable?): Boolean = close(cause)
+
+    /**
      * Sends the value to all subscribed receives and stores this value as the most recent state for
      * future subscribers. This implementation never suspends.
      * It throws exception if the channel [isClosedForSend] (see [close] for details).
      */
-    suspend override fun send(element: E) {
+    public override suspend fun send(element: E) {
         offerInternal(element)?.let { throw it.sendException }
     }
 
@@ -198,7 +201,7 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
      * future subscribers. This implementation always returns `true`.
      * It throws exception if the channel [isClosedForSend] (see [close] for details).
      */
-    override fun offer(element: E): Boolean {
+    public override fun offer(element: E): Boolean {
         offerInternal(element)?.let { throw it.sendException }
         return true
     }
@@ -230,7 +233,7 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
         }
     }
 
-    override val onSend: SelectClause2<E, SendChannel<E>>
+    public override val onSend: SelectClause2<E, SendChannel<E>>
         get() = object : SelectClause2<E, SendChannel<E>> {
             override fun <R> registerSelectClause2(select: SelectInstance<R>, param: E, block: suspend (SendChannel<E>) -> R) {
                 registerSelectSend(select, param, block)
