@@ -55,6 +55,22 @@ import kotlinx.coroutines.experimental.intrinsics.*
 import kotlin.coroutines.experimental.*
 
 /**
+ * Broadcasts all elements of the channel.
+ *
+ * @param capacity capacity of the channel's buffer (1 by default).
+ * @param start coroutine start option. The default value is [CoroutineStart.LAZY].
+ */
+fun <E> ReceiveChannel<E>.broadcast(
+    capacity: Int = 1,
+    start: CoroutineStart = CoroutineStart.LAZY
+) : BroadcastChannel<E> =
+    broadcast(Unconfined, capacity = capacity, start = start, onCompletion = consumes()) {
+        for (e in this@broadcast) {
+            send(e)
+        }
+    }
+
+/**
  * Launches new coroutine to produce a stream of values by sending them to a broadcast channel
  * and returns a reference to the coroutine as a [BroadcastChannel]. This resulting
  * object can be used to [subscribe][BroadcastChannel.openSubscription] to elements produced by this coroutine.
