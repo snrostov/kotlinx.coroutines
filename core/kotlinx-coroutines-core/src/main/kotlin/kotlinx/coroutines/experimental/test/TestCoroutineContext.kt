@@ -16,13 +16,11 @@
 
 package kotlinx.coroutines.experimental.test
 
+import kotlinx.atomicfu.*
 import kotlinx.coroutines.experimental.*
-import java.util.concurrent.PriorityBlockingQueue
+import kotlinx.coroutines.experimental.internal.*
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
-import kotlin.coroutines.experimental.CoroutineContext
-
-private const val MAX_DELAY = Long.MAX_VALUE - 1
+import kotlin.coroutines.experimental.*
 
 /**
  * This [CoroutineContext] dispatcher can be used to simulate virtual time to speed up
@@ -41,31 +39,54 @@ private const val MAX_DELAY = Long.MAX_VALUE - 1
  * @param name A user-readable name for debugging purposes.
  */
 class TestCoroutineContext(private val name: String? = null) : CoroutineContext {
-    private val caughtExceptions = mutableListOf<Throwable>()
+    private val uncaughtExceptions = mutableListOf<Throwable>()
 
-    private val context = Dispatcher() + CoroutineExceptionHandler(this::handleException)
+    private val ctxDispatcher = Dispatcher()
+    
+    private val ctxHandler = CoroutineExceptionHandler { _, exception ->
+        uncaughtExceptions += exception
+    }
 
-    private val handler = TestHandler()
+    // The ordered queue for the runnable tasks.
+    private val queue = ThreadSafeHeap<TimedRunnable>()
+
+    // The per-scheduler global order counter.
+    private val counter = atomic(0L)
+
+    // Storing time in nanoseconds internally.
+    private val time = atomic(0L)
 
     /**
      * Exceptions that were caught during a [launch] or a [async] + [Deferred.await].
      */
-    val exceptions: List<Throwable> get() = caughtExceptions
+    public val exceptions: List<Throwable> get() = uncaughtExceptions
 
-    override fun <R> fold(initial: R, operation: (R, CoroutineContext.Element) -> R): R =
-            context.fold(initial, operation)
+    // -- CoroutineContext implementation 
 
-    override fun <E : CoroutineContext.Element> get(key: CoroutineContext.Key<E>): E? = context[key]
+    public override fun <R> fold(initial: R, operation: (R, CoroutineContext.Element) -> R): R =
+        operation(operation(initial, ctxDispatcher), ctxHandler)
 
-    override fun minusKey(key: CoroutineContext.Key<*>): CoroutineContext = context.minusKey(key)
+    @Suppress("UNCHECKED_CAST")
+    public override fun <E : CoroutineContext.Element> get(key: CoroutineContext.Key<E>): E? = when {
+        key === ContinuationInterceptor -> ctxDispatcher as E
+        key === CoroutineExceptionHandler -> ctxHandler as E
+        else -> null
+    }
 
+    public override fun minusKey(key: CoroutineContext.Key<*>): CoroutineContext = when {
+        key === ContinuationInterceptor -> ctxHandler
+        key === CoroutineExceptionHandler -> ctxDispatcher
+        else -> this
+    }
+    
     /**
      * Returns the current virtual clock-time as it is known to this CoroutineContext.
      *
      * @param unit The [TimeUnit] in which the clock-time must be returned.
      * @return The virtual clock-time
      */
-    fun now(unit: TimeUnit = TimeUnit.MILLISECONDS): Long = handler.now(unit)
+    public fun now(unit: TimeUnit = TimeUnit.MILLISECONDS)=
+        unit.convert(time.value, TimeUnit.NANOSECONDS)
 
     /**
      * Moves the CoroutineContext's virtual clock forward by a specified amount of time.
@@ -77,8 +98,11 @@ class TestCoroutineContext(private val name: String? = null) : CoroutineContext 
      * @param unit The [TimeUnit] in which [delayTime] and the return value is expressed.
      * @return The amount of delay-time that this CoroutinesContext's clock has been forwarded.
      */
-    fun advanceTimeBy(delayTime: Long, unit: TimeUnit = TimeUnit.MILLISECONDS) =
-            handler.advanceTimeBy(delayTime, unit)
+    public fun advanceTimeBy(delayTime: Long, unit: TimeUnit = TimeUnit.MILLISECONDS): Long {
+        val oldTime = time.value
+        advanceTimeTo(oldTime + unit.toNanos(delayTime), TimeUnit.NANOSECONDS)
+        return unit.convert(time.value - oldTime, TimeUnit.NANOSECONDS)
+    }
 
     /**
      * Moves the CoroutineContext's clock-time to a particular moment in time.
@@ -87,148 +111,85 @@ class TestCoroutineContext(private val name: String? = null) : CoroutineContext 
      * @param unit The [TimeUnit] in which [targetTime] is expressed.
      */
     fun advanceTimeTo(targetTime: Long, unit: TimeUnit = TimeUnit.MILLISECONDS) {
-        handler.advanceTimeTo(targetTime, unit)
+        val nanoTime = unit.toNanos(targetTime)
+        triggerActions(nanoTime)
+        if (nanoTime > time.value) time.value = nanoTime
     }
 
     /**
      * Triggers any actions that have not yet been triggered and that are scheduled to be triggered at or
      * before this CoroutineContext's present virtual clock-time.
      */
-    fun triggerActions() {
-        handler.triggerActions()
-    }
+    public fun triggerActions() = triggerActions(time.value)
 
     /**
      * Cancels all not yet triggered actions. Be careful calling this, since it can seriously
      * mess with your coroutines work. This method should usually be called on tear-down of a
      * unit test.
      */
-    fun cancelAllActions() {
-        handler.cancelAllActions()
-    }
+    public fun cancelAllActions() = queue.clear()
 
-    override fun toString(): String = name ?: super.toString()
+    private fun post(block: Runnable) =
+        queue.addLast(TimedRunnable(block, counter.getAndIncrement()))
 
-    override fun equals(other: Any?): Boolean = (other is TestCoroutineContext) && (other.handler === handler)
-
-    override fun hashCode(): Int = System.identityHashCode(handler)
-
-    private fun handleException(@Suppress("UNUSED_PARAMETER") context: CoroutineContext, exception: Throwable) {
-        caughtExceptions += exception
-    }
-
-    private inner class Dispatcher : CoroutineDispatcher(), Delay, EventLoop {
-        override fun dispatch(context: CoroutineContext, block: Runnable) {
-            handler.post(block)
-        }
-
-        override fun scheduleResumeAfterDelay(time: Long, unit: TimeUnit, continuation: CancellableContinuation<Unit>) {
-            handler.postDelayed(Runnable {
-                with(continuation) { resumeUndispatched(Unit) }
-            }, unit.toMillis(time).coerceAtMost(MAX_DELAY))
-        }
-
-        override fun invokeOnTimeout(time: Long, unit: TimeUnit, block: Runnable): DisposableHandle {
-            handler.postDelayed(block, unit.toMillis(time).coerceAtMost(MAX_DELAY))
-            return object : DisposableHandle {
-                override fun dispose() {
-                    handler.removeCallbacks(block)
-                }
+    private fun postDelayed(block: Runnable, delayTime: Long) =
+        TimedRunnable(block, counter.getAndIncrement(), time.value + TimeUnit.MILLISECONDS.toNanos(delayTime))
+            .also {
+                queue.addLast(it)
             }
-        }
 
-        override fun processNextEvent() = handler.processNextEvent()
-    }
-}
-
-private class TestHandler {
-    // The ordered queue for the runnable tasks.
-    private val queue = PriorityBlockingQueue<TimedRunnable>(16)
-
-    // The per-scheduler global order counter.
-    private var counter = AtomicLong(0L)
-
-    // Storing time in nanoseconds internally.
-    private var time = AtomicLong(0L)
-
-    private val nextEventTime get() = if (queue.isEmpty()) Long.MAX_VALUE else 0L
-
-    internal fun post(block: Runnable) {
-        queue.add(TimedRunnable(block, counter.getAndIncrement()))
-    }
-
-    internal fun postDelayed(block: Runnable, delayTime: Long) {
-        queue.add(TimedRunnable(block, counter.getAndIncrement(), time.get() + TimeUnit.MILLISECONDS.toNanos(delayTime)))
-    }
-
-    internal fun removeCallbacks(block: Runnable) {
-        queue.remove(TimedRunnable(block))
-    }
-
-    internal fun now(unit: TimeUnit) = unit.convert(time.get(), TimeUnit.NANOSECONDS)
-
-    internal fun advanceTimeBy(delayTime: Long, unit: TimeUnit): Long {
-        val oldTime = time.get()
-
-        advanceTimeTo(oldTime + unit.toNanos(delayTime), TimeUnit.NANOSECONDS)
-
-        return unit.convert(time.get() - oldTime, TimeUnit.NANOSECONDS)
-    }
-
-    internal fun advanceTimeTo(targetTime: Long, unit: TimeUnit) {
-        val nanoTime = unit.toNanos(targetTime)
-
-        triggerActions(nanoTime)
-
-        if (nanoTime > time.get()) {
-            time.set(nanoTime)
-        }
-    }
-
-    internal fun triggerActions() {
-        triggerActions(time.get())
-    }
-
-    internal fun cancelAllActions() {
-        queue.clear()
-    }
-
-    internal fun processNextEvent(): Long {
+    private fun processNextEvent(): Long {
         val current = queue.peek()
         if (current != null) {
             /** Automatically advance time for [EventLoop]-callbacks */
             triggerActions(current.time)
         }
-
-        return nextEventTime
+        return if (queue.isEmpty) Long.MAX_VALUE else 0L
     }
 
     private fun triggerActions(targetTime: Long) {
         while (true) {
-            val current = queue.peek()
-            if (current == null || current.time > targetTime) {
-                break
-            }
-
+            val current = queue.removeFirstIf { it.time <= targetTime } ?: break
             // If the scheduled time is 0 (immediate) use current virtual time
-            if (current.time != 0L) {
-                time.set(current.time)
-            }
-
-            queue.remove(current)
+            if (current.time != 0L) time.value = current.time
             current.run()
         }
+    }
+
+    public override fun toString(): String = name ?: "TestCoroutineContext@$hexAddress"
+
+    private inner class Dispatcher : CoroutineDispatcher(), Delay, EventLoop {
+        override fun dispatch(context: CoroutineContext, block: Runnable) = post(block)
+
+        override fun scheduleResumeAfterDelay(time: Long, unit: TimeUnit, continuation: CancellableContinuation<Unit>) {
+            postDelayed(Runnable {
+                with(continuation) { resumeUndispatched(Unit) }
+            }, unit.toMillis(time))
+        }
+
+        override fun invokeOnTimeout(time: Long, unit: TimeUnit, block: Runnable): DisposableHandle {
+            val node = postDelayed(block, unit.toMillis(time))
+            return object : DisposableHandle {
+                override fun dispose() {
+                    queue.remove(node)
+                }
+            }
+        }
+
+        override fun processNextEvent() = this@TestCoroutineContext.processNextEvent()
+
+        public override fun toString(): String = "Dispatcher(${this@TestCoroutineContext})"
     }
 }
 
 private class TimedRunnable(
-        private val run: Runnable,
-        private val count: Long = 0,
-        internal val time: Long = 0
-) : Comparable<TimedRunnable>, Runnable {
-    override fun run() {
-        run.run()
-    }
+    private val run: Runnable,
+    private val count: Long = 0,
+    @JvmField internal val time: Long = 0
+) : Comparable<TimedRunnable>, Runnable by run, ThreadSafeHeapNode {
+    override var index: Int = 0
+
+    override fun run() = run.run()
 
     override fun compareTo(other: TimedRunnable) = if (time == other.time) {
         count.compareTo(other.count)
@@ -236,9 +197,5 @@ private class TimedRunnable(
         time.compareTo(other.time)
     }
 
-    override fun hashCode() = run.hashCode()
-
-    override fun equals(other: Any?) = other is TimedRunnable && (run == other.run)
-
-    override fun toString() = String.format("TimedRunnable(time = %d, run = %s)", time, run.toString())
+    override fun toString() = "TimedRunnable(time=$time, run=$run)"
 }
