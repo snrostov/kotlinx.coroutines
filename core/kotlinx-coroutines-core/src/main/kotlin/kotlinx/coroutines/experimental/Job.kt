@@ -688,14 +688,16 @@ internal actual open class JobSupport actual constructor(active: Boolean) : Job,
         if (proposedUpdate !is Cancelled) return false
         // NOTE: equality comparison of causes is performed here by design, see equals of JobCancellationException
         return proposedUpdate.cause == cancelled.cause ||
-            proposedUpdate.cause is JobCancellationException && cancelled.cause == null
+            proposedUpdate.cause is JobCancellationException && cancelled.isCancelledWithoutCause()
     }
 
     private fun createCancelled(cancelled: Cancelled, proposedUpdate: Any?): Cancelled {
         if (proposedUpdate !is CompletedExceptionally) return cancelled // not exception -- just use original cancelled
         val exception = proposedUpdate.exception
         if (cancelled.exception == exception) return cancelled // that is the cancelled we need already!
-        cancelled.cause?.let { exception.addSuppressed(it) }
+        if (!cancelled.isCancelledWithoutCause()) {
+            exception.addSuppressed(cancelled.cause)
+        }
         return Cancelled(this, exception)
     }
 
@@ -818,7 +820,13 @@ internal actual open class JobSupport actual constructor(active: Boolean) : Job,
     protected fun getCompletionCause(): Throwable? {
         val state = this.state
         return when {
-            state is Finishing && state.cancelled != null -> state.cancelled.cause
+            state is Finishing && state.cancelled != null -> {
+                if (state.cancelled.isCancelledWithoutCause()) {
+                    null
+                } else {
+                    state.cancelled.cause
+                }
+            }
             state is Incomplete -> error("Job was not completed or cancelled yet")
             state is CompletedExceptionally -> state.cause
             else -> null
