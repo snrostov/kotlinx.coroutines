@@ -103,7 +103,7 @@ private open class TimeoutCoroutine<U, in T: U>(
     @Suppress("UNCHECKED_CAST")
     internal override fun onCompletionInternal(state: Any?, mode: Int) {
         if (state is CompletedExceptionally)
-            cont.resumeWithExceptionMode(state.exception, mode)
+            cont.resumeWithExceptionMode(state.cause, mode)
         else
             cont.resumeMode(state as T, mode)
     }
@@ -173,7 +173,7 @@ private class TimeoutOrNullCoroutine<T>(
     @Suppress("UNCHECKED_CAST")
     internal override fun onCompletionInternal(state: Any?, mode: Int) {
         if (state is CompletedExceptionally) {
-            val exception = state.exception
+            val exception = state.cause
             if (exception is TimeoutCancellationException && exception.coroutine === this)
                 cont.resumeMode(null, mode) else
                 cont.resumeWithExceptionMode(exception, mode)
