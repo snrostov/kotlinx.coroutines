@@ -23,7 +23,7 @@ import kotlin.coroutines.experimental.CoroutineContext
 
 private const val DEBUG_PROPERTY_NAME = "kotlinx.coroutines.debug"
 
-private val DEBUG = run {
+internal val DEBUG = run {
     val value = try { System.getProperty(DEBUG_PROPERTY_NAME) }
         catch (e: SecurityException) { null }
     when (value) {
