@@ -51,7 +51,8 @@ public fun <T> runBlocking(context: CoroutineContext = EmptyCoroutineContext, bl
     val privateEventLoop = contextInterceptor == null // create private event loop if no dispatcher is specified
     val eventLoop = if (privateEventLoop) BlockingEventLoop(currentThread) else contextInterceptor as? EventLoop
     val newContext = newCoroutineContext(
-        if (privateEventLoop) context + (eventLoop as ContinuationInterceptor) else context
+        if (privateEventLoop) context + (eventLoop as ContinuationInterceptor) else context,
+            null
     )
     val coroutine = BlockingCoroutine<T>(newContext, currentThread, eventLoop, privateEventLoop)
     coroutine.start(CoroutineStart.DEFAULT, coroutine, block)

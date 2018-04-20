@@ -62,7 +62,7 @@ public actual open class TestBase actual constructor() {
      * Throws [IllegalStateException] like `error` in stdlib, but also ensures that the test will not
      * complete successfully even if this exception is consumed somewhere in the test.
      */
-    public actual fun error(message: Any, cause: Throwable? = null): Nothing {
+    public actual fun error(message: Any, cause: Throwable?): Nothing {
         val exception = IllegalStateException(message.toString(), cause)
         error.compareAndSet(null, exception)
         throw exception
@@ -119,8 +119,8 @@ public actual open class TestBase actual constructor() {
 
     @Suppress("ACTUAL_WITHOUT_EXPECT")
     public actual fun runTest(
-        expected: ((Throwable) -> Boolean)? = null,
-        unhandled: List<(Throwable) -> Boolean> = emptyList(),
+        expected: ((Throwable) -> Boolean)?,
+        unhandled: List<(Throwable) -> Boolean>,
         block: suspend CoroutineScope.() -> Unit
     ) {
         var exCount = 0

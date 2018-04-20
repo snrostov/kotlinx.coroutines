@@ -14,32 +14,30 @@
  * limitations under the License.
  */
 
-package kotlinx.coroutines.experimental.channels
+package kotlinx.coroutines.experimental.channels.common
 
 import kotlinx.coroutines.experimental.TestBase
-import kotlinx.coroutines.experimental.runBlocking
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.core.IsEqual
-import org.hamcrest.core.IsNull
-import org.junit.Test
+import kotlinx.coroutines.experimental.channels.LinkedListChannel
+import kotlin.test.*
 
 class LinkedListChannelTestCommon : TestBase() {
+
     @Test
-    fun testBasic() = runBlocking {
+    fun testBasic() = runTest {
         val c = LinkedListChannel<Int>()
         c.send(1)
         check(c.offer(2))
         c.send(3)
         check(c.close())
         check(!c.close())
-        assertThat(c.receive(), IsEqual(1))
-        assertThat(c.poll(), IsEqual(2))
-        assertThat(c.receiveOrNull(), IsEqual(3))
-        assertThat(c.receiveOrNull(), IsNull())
+        assertEquals(1, c.receive())
+        assertEquals(2, c.poll())
+        assertEquals(3, c.receiveOrNull())
+        assertNull(c.receiveOrNull())
     }
 
     @Test
-    fun testConsumeAll() = runBlocking {
+    fun testConsumeAll() = runTest {
         val q = LinkedListChannel<Int>()
         for (i in 1..10) {
             q.send(i) // buffers

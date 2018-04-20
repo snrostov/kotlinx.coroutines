@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-package kotlinx.coroutines.experimental.channels
+package kotlinx.coroutines.experimental.channels.common
 
 import kotlinx.coroutines.experimental.*
-import org.hamcrest.core.*
-import org.junit.*
-import org.junit.Assert.*
+import kotlinx.coroutines.experimental.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.experimental.channels.ClosedSendChannelException
+import kotlinx.coroutines.experimental.channels.RendezvousChannel
+import kotlinx.coroutines.experimental.channels.produce
 import kotlin.coroutines.experimental.*
+import kotlin.test.*
 
 class RendezvousChannelTestCommon : TestBase() {
+
     @Test
-    fun testSimple() = runBlocking {
+    fun testSimple() = runTest {
         val q = RendezvousChannel<Int>()
         check(q.isEmpty && q.isFull)
         expect(1)
@@ -51,25 +54,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testStress() = runBlocking {
-        val n = 100_000
-        val q = RendezvousChannel<Int>()
-        val sender = launch(coroutineContext) {
-            for (i in 1..n) q.send(i)
-            expect(2)
-        }
-        val receiver = launch(coroutineContext) {
-            for (i in 1..n) check(q.receive() == i)
-            expect(3)
-        }
-        expect(1)
-        sender.join()
-        receiver.join()
-        finish(4)
-    }
-
-    @Test
-    fun testClosedReceiveOrNull() = runBlocking {
+    fun testClosedReceiveOrNull() = runTest {
         val q = RendezvousChannel<Int>()
         check(q.isEmpty && q.isFull && !q.isClosedForSend && !q.isClosedForReceive)
         expect(1)
@@ -91,7 +76,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testClosedExceptions() = runBlocking {
+    fun testClosedExceptions() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -113,7 +98,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testOfferAndPool() = runBlocking {
+    fun testOfferAndPool() = runTest {
         val q = RendezvousChannel<Int>()
         assertFalse(q.offer(1))
         expect(1)
@@ -141,7 +126,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testIteratorClosed() = runBlocking {
+    fun testIteratorClosed() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -157,7 +142,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testIteratorOne() = runBlocking {
+    fun testIteratorOne() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -176,7 +161,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testIteratorOneWithYield() = runBlocking {
+    fun testIteratorOneWithYield() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -197,7 +182,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testIteratorTwo() = runBlocking {
+    fun testIteratorTwo() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -221,7 +206,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testIteratorTwoWithYield() = runBlocking {
+    fun testIteratorTwoWithYield() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -247,7 +232,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testSuspendSendOnClosedChannel() = runBlocking<Unit> {
+    fun testSuspendSendOnClosedChannel() = runTest {
         val q = RendezvousChannel<Int>()
         expect(1)
         launch(coroutineContext) {
@@ -266,9 +251,9 @@ class RendezvousChannelTestCommon : TestBase() {
         expect(7)
         yield() // try to resume sender (it will not resume despite the close!)
         expect(8)
-        assertThat(q.receiveOrNull(), IsEqual(42))
+        assertEquals(42, q.receiveOrNull())
         expect(9)
-        assertThat(q.receiveOrNull(), IsNull())
+        assertNull(q.receiveOrNull())
         expect(10)
         yield() // to sender, it was resumed!
         finish(12)
@@ -281,7 +266,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testProduceBadClass() = runBlocking {
+    fun testProduceBadClass() = runTest {
         val bad = BadClass()
         val c = produce(coroutineContext) {
             expect(1)
@@ -292,7 +277,7 @@ class RendezvousChannelTestCommon : TestBase() {
     }
 
     @Test
-    fun testConsumeAll() = runBlocking {
+    fun testConsumeAll() = runTest {
         val q = RendezvousChannel<Int>()
         for (i in 1..10) {
             launch(coroutineContext, CoroutineStart.UNDISPATCHED) {
