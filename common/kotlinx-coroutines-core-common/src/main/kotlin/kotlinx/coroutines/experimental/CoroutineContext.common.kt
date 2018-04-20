@@ -19,7 +19,7 @@ package kotlinx.coroutines.experimental
 import kotlin.coroutines.experimental.*
 
 @Suppress("EXPECTED_DECLARATION_WITH_DEFAULT_PARAMETER")
-public expect fun newCoroutineContext(context: CoroutineContext, parent: Job? = null): CoroutineContext
+public expect fun newCoroutineContext(context: CoroutineContext, parent: Job?): CoroutineContext
 
 @Suppress("PropertyName")
 public expect val DefaultDispatcher: CoroutineDispatcher

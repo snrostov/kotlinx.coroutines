@@ -95,7 +95,8 @@ public fun <E> produce(
     capacity: Int = 0,
     parent: Job? = null,
     block: suspend ProducerScope<E>.() -> Unit
-): ReceiveChannel<E> = produce(context, capacity, parent, block = block)
+): ReceiveChannel<E> =
+    produce(context, capacity, parent, block = block)
 
 /** @suppress **Deprecated**: Binary compatibility */
 @Deprecated(message = "Binary compatibility", level = DeprecationLevel.HIDDEN)
@@ -104,7 +105,11 @@ public fun <E> produce(
     capacity: Int = 0,
     block: suspend ProducerScope<E>.() -> Unit
 ): ProducerJob<E> =
-    produce(context, capacity, block = block) as ProducerJob<E>
+    produce(
+        context,
+        capacity,
+        block = block
+    ) as ProducerJob<E>
 
 /**
  * @suppress **Deprecated**: Renamed to `produce`.
@@ -115,11 +120,16 @@ public fun <E> buildChannel(
     capacity: Int = 0,
     block: suspend ProducerScope<E>.() -> Unit
 ): ProducerJob<E> =
-    produce(context, capacity, block = block) as ProducerJob<E>
+    produce(
+        context,
+        capacity,
+        block = block
+    ) as ProducerJob<E>
 
 private class ProducerCoroutine<E>(
     parentContext: CoroutineContext, channel: Channel<E>
-) : ChannelCoroutine<E>(parentContext, channel, active = true), ProducerScope<E>, ProducerJob<E> {
+) : ChannelCoroutine<E>(parentContext, channel, active = true),
+    ProducerScope<E>, ProducerJob<E> {
     override fun onCancellationInternal(exceptionally: CompletedExceptionally?) {
         val cause = exceptionally?.cause
         val processed = when (exceptionally) {

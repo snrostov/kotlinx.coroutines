@@ -41,11 +41,19 @@ enum class TestChannelKind {
         override val isConflated: Boolean get() = true
     },
     ARRAY_BROADCAST_1 {
-        override fun create(): Channel<Int> = ChannelViaBroadcast(ArrayBroadcastChannel<Int>(1))
+        override fun create(): Channel<Int> = ChannelViaBroadcast(
+            ArrayBroadcastChannel<Int>(
+                1
+            )
+        )
         override fun toString(): String = "ArrayBroadcastChannel(1)"
     },
     ARRAY_BROADCAST_10 {
-        override fun create(): Channel<Int> = ChannelViaBroadcast(ArrayBroadcastChannel<Int>(10))
+        override fun create(): Channel<Int> = ChannelViaBroadcast(
+            ArrayBroadcastChannel<Int>(
+                10
+            )
+        )
         override fun toString(): String = "ArrayBroadcastChannel(10)"
     },
     CONFLATED_BROADCAST {

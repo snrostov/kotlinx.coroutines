@@ -16,9 +16,10 @@
 
 package kotlinx.coroutines.experimental.channels
 
+import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel.Factory.CONFLATED
 import kotlinx.coroutines.experimental.channels.Channel.Factory.UNLIMITED
-import java.io.Closeable
+import kotlinx.coroutines.experimental.internal.Closeable
 
 /**
  * Broadcast channel is a non-blocking primitive for communication between the sender and multiple receivers
@@ -79,7 +80,8 @@ public fun <E> BroadcastChannel(capacity: Int): BroadcastChannel<E> =
  *
  * Note, that invocation of [cancel] also closes subscription.
  */
-public interface SubscriptionReceiveChannel<out T> : ReceiveChannel<T>, Closeable {
+public interface SubscriptionReceiveChannel<out T> : ReceiveChannel<T>,
+    Closeable {
     /**
      * Closes this subscription. This is a synonym for [cancel].
      */

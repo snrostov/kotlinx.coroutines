@@ -17,85 +17,99 @@
 package kotlinx.coroutines.experimental.channels
 
 import kotlinx.coroutines.experimental.*
-import org.hamcrest.core.*
-import org.junit.*
-import org.junit.Assert.*
 import kotlin.coroutines.experimental.*
+import kotlin.test.*
 
 class ConflatedBroadcastChannelTest : TestBase() {
+
     @Test
-    fun testBasicScenario() = runBlocking {
-        expect(1)
-        val broadcast = ConflatedBroadcastChannel<String>()
-        assertThat(exceptionFrom { broadcast.value }, IsInstanceOf(IllegalStateException::class.java))
-        assertThat(broadcast.valueOrNull, IsNull())
-        launch(coroutineContext, CoroutineStart.UNDISPATCHED) {
-            expect(2)
-            val sub = broadcast.openSubscription()
-            assertThat(sub.poll(), IsNull())
-            expect(3)
-            assertThat(sub.receive(), IsEqual("one")) // suspends
-            expect(6)
-            assertThat(sub.receive(), IsEqual("two")) // suspends
-            expect(12)
-            sub.close()
-            expect(13)
+    fun testBasicScenario() = runTest {
+        try {
+            expect(1)
+            val broadcast = ConflatedBroadcastChannel<String>()
+            assertTrue(exceptionFrom { broadcast.value } is IllegalStateException)
+            assertNull(broadcast.valueOrNull)
+
+            launch(coroutineContext, CoroutineStart.UNDISPATCHED) {
+                try {
+                    expect(2)
+                    val sub = broadcast.openSubscription()
+                    assertNull(sub.poll())
+                    expect(3)
+                    assertEquals("one", sub.receive()) // suspends
+                    expect(6)
+                    assertEquals("two", sub.receive()) // suspends
+                    expect(12)
+                    sub.close()
+                    expect(13)
+                } catch (e: Throwable) {
+                    println("EEEEEE: $e")
+                }
+            }
+
+            expect(4)
+            broadcast.send("one") // does not suspend
+            assertEquals("one", broadcast.value)
+            assertEquals("one", broadcast.valueOrNull)
+            expect(5)
+            yield() // to receiver
+            expect(7)
+            launch(coroutineContext, CoroutineStart.UNDISPATCHED) {
+                try {
+                    expect(8)
+                    val sub = broadcast.openSubscription()
+                    assertEquals("one", sub.receive()) // does not suspend
+                    expect(9)
+                    assertEquals("two", sub.receive()) // suspends
+                    expect(14)
+                    assertEquals("three", sub.receive()) // suspends
+                    expect(17)
+                    assertNull(sub.receiveOrNull()) // suspends until closed
+                    expect(20)
+                    sub.close()
+                    expect(21)
+                } catch (e: Throwable) {
+                    println("EEEEEE: $e")
+                }
+            }
+
+            expect(10)
+            broadcast.send("two") // does not suspend
+            assertEquals("two", broadcast.value)
+            assertEquals("two", broadcast.valueOrNull)
+            expect(11)
+            yield() // to both receivers
+            expect(15)
+            broadcast.send("three") // does not suspend
+            assertEquals("three", broadcast.value)
+            assertEquals("three", broadcast.valueOrNull)
+            expect(16)
+            yield() // to second receiver
+            expect(18)
+            broadcast.close()
+            assertTrue(exceptionFrom { broadcast.value } is IllegalStateException)
+            assertNull(broadcast.valueOrNull)
+            expect(19)
+            yield() // to second receiver
+            assertTrue(exceptionFrom { broadcast.send("four") } is ClosedSendChannelException)
+            finish(22)
+        } catch (e: Throwable) {
+            println("EEEEEEEEEEEEE: $e")
         }
-        expect(4)
-        broadcast.send("one") // does not suspend
-        assertThat(broadcast.value, IsEqual("one"))
-        assertThat(broadcast.valueOrNull, IsEqual("one"))
-        expect(5)
-        yield() // to receiver
-        expect(7)
-        launch(coroutineContext, CoroutineStart.UNDISPATCHED) {
-            expect(8)
-            val sub = broadcast.openSubscription()
-            assertThat(sub.receive(), IsEqual("one")) // does not suspend
-            expect(9)
-            assertThat(sub.receive(), IsEqual("two")) // suspends
-            expect(14)
-            assertThat(sub.receive(), IsEqual("three")) // suspends
-            expect(17)
-            assertThat(sub.receiveOrNull(), IsNull()) // suspends until closed
-            expect(20)
-            sub.close()
-            expect(21)
-        }
-        expect(10)
-        broadcast.send("two") // does not suspend
-        assertThat(broadcast.value, IsEqual("two"))
-        assertThat(broadcast.valueOrNull, IsEqual("two"))
-        expect(11)
-        yield() // to both receivers
-        expect(15)
-        broadcast.send("three") // does not suspend
-        assertThat(broadcast.value, IsEqual("three"))
-        assertThat(broadcast.valueOrNull, IsEqual("three"))
-        expect(16)
-        yield() // to second receiver
-        expect(18)
-        broadcast.close()
-        assertThat(exceptionFrom { broadcast.value }, IsInstanceOf(IllegalStateException::class.java))
-        assertThat(broadcast.valueOrNull, IsNull())
-        expect(19)
-        yield() // to second receiver
-        assertThat(exceptionFrom { broadcast.send("four") }, IsInstanceOf(ClosedSendChannelException::class.java))
-        finish(22)
     }
 
     @Test
-    fun testInitialValueAndReceiveClosed() = runBlocking {
+    fun testInitialValueAndReceiveClosed() = runTest {
         expect(1)
-        val broadcast = ConflatedBroadcastChannel<Int>(1)
-        assertThat(broadcast.value, IsEqual(1))
-        assertThat(broadcast.valueOrNull, IsEqual(1))
+        val broadcast = ConflatedBroadcastChannel(1)
+        assertEquals(1, broadcast.value)
+        assertEquals(1, broadcast.valueOrNull)
         launch(coroutineContext, CoroutineStart.UNDISPATCHED) {
             expect(2)
             val sub = broadcast.openSubscription()
-            assertThat(sub.receive(), IsEqual(1))
+            assertEquals(1, sub.receive())
             expect(3)
-            assertThat(exceptionFrom { sub.receive() }, IsInstanceOf(ClosedReceiveChannelException::class.java)) // suspends
+            assertTrue(exceptionFrom { sub.receive() } is ClosedReceiveChannelException) // suspends
             expect(6)
         }
         expect(4)
@@ -105,12 +119,12 @@ class ConflatedBroadcastChannelTest : TestBase() {
         finish(7)
     }
 
-    inline fun exceptionFrom(block: () -> Unit): Throwable? {
-        try {
+    private inline fun exceptionFrom(block: () -> Unit): Throwable? {
+        return try {
             block()
-            return null
+            null
         } catch (e: Throwable) {
-            return e
+            e
         }
     }
 }

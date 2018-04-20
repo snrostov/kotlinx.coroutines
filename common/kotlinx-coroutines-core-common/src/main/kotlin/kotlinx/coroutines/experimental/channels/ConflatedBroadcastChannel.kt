@@ -18,7 +18,8 @@ package kotlinx.coroutines.experimental.channels
 
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.loop
-import kotlinx.coroutines.experimental.internal.Symbol
+import kotlinx.coroutines.experimental.internal.*
+import kotlinx.coroutines.experimental.internalAnnotations.*
 import kotlinx.coroutines.experimental.intrinsics.startCoroutineUndispatched
 import kotlinx.coroutines.experimental.selects.SelectClause2
 import kotlinx.coroutines.experimental.selects.SelectInstance
@@ -60,7 +61,10 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
         val UNDEFINED = Symbol("UNDEFINED")
 
         @JvmField
-        val INITIAL_STATE = State<Any?>(UNDEFINED, null)
+        val INITIAL_STATE = State<Any?>(
+            UNDEFINED,
+            null
+        )
     }
 
     private class State<E>(
@@ -69,7 +73,9 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
     )
 
     private class Closed(@JvmField val closeCause: Throwable?) {
-        val sendException: Throwable get() = closeCause ?: ClosedSendChannelException(DEFAULT_CLOSE_MESSAGE)
+        val sendException: Throwable get() = closeCause ?: ClosedSendChannelException(
+            DEFAULT_CLOSE_MESSAGE
+        )
         val valueException: Throwable get() = closeCause ?: IllegalStateException(DEFAULT_CLOSE_MESSAGE)
     }
 
@@ -126,7 +132,13 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
                 is State<*> -> {
                     if (state.value !== UNDEFINED)
                         subscriber.offerInternal(state.value as E)
-                    val update = State(state.value, addSubscriber((state as State<E>).subscribers, subscriber))
+                    val update = State(
+                        state.value,
+                        addSubscriber(
+                            (state as State<E>).subscribers,
+                            subscriber
+                        )
+                    )
                     if (_state.compareAndSet(state, update))
                         return subscriber
                 }
@@ -141,7 +153,13 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
             when (state) {
                 is Closed -> return
                 is State<*> -> {
-                    val update = State(state.value, removeSubscriber((state as State<E>).subscribers!!, subscriber))
+                    val update = State(
+                        state.value,
+                        removeSubscriber(
+                            (state as State<E>).subscribers!!,
+                            subscriber
+                        )
+                    )
                     if (_state.compareAndSet(state, update))
                         return
                 }
@@ -162,8 +180,8 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
         check(i >= 0)
         if (n == 1) return null
         val update = arrayOfNulls<Subscriber<E>>(n - 1)
-        System.arraycopy(list, 0, update, 0, i)
-        System.arraycopy(list, i + 1, update, i, n - i - 1)
+        arraycopy(list, 0, update, 0, i)
+        arraycopy(list, i + 1, update, i, n - i - 1)
         return update as Array<Subscriber<E>>
     }
 
@@ -173,7 +191,9 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
             when (state) {
                 is Closed -> return false
                 is State<*> -> {
-                    val update = if (cause == null) CLOSED else Closed(cause)
+                    val update = if (cause == null) CLOSED else Closed(
+                        cause
+                    )
                     if (_state.compareAndSet(state, update)) {
                         (state as State<E>).subscribers?.forEach { it.close(cause) }
                         return true
@@ -213,7 +233,10 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
                 when (state) {
                     is Closed -> return state
                     is State<*> -> {
-                        val update = State(element, (state as State<E>).subscribers)
+                        val update = State(
+                            element,
+                            (state as State<E>).subscribers
+                        )
                         if (_state.compareAndSet(state, update)) {
                             // Note: Using offerInternal here to ignore the case when this subscriber was
                             // already concurrently closed (assume the close had conflated our offer for this
@@ -248,7 +271,8 @@ public class ConflatedBroadcastChannel<E>() : BroadcastChannel<E> {
 
     private class Subscriber<E>(
         private val broadcastChannel: ConflatedBroadcastChannel<E>
-    ) : ConflatedChannel<E>(), SubscriptionReceiveChannel<E> {
+    ) : ConflatedChannel<E>(),
+        SubscriptionReceiveChannel<E> {
         override fun cancel(cause: Throwable?): Boolean =
             close(cause).also { closed ->
                 if (closed) broadcastChannel.closeSubscriber(this)

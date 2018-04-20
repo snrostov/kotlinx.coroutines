@@ -17,7 +17,7 @@ jmh.jmhVersion = '1.19'
 
 jmhJar.archiveName = 'benchmarks.jar'
 
-//jmh {
-//    include = ['.*Channel.*Benchmark']
+jmh {
+    include = ['.*RandomBenchmark']
 //    exclude = ['.*Guice.*', '.*PingPong.*']
-//}
+}

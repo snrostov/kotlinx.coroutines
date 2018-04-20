@@ -16,10 +16,9 @@
 
 package kotlinx.coroutines.experimental.channels
 
+import kotlinx.coroutines.experimental.internal.*
+import kotlinx.coroutines.experimental.internalAnnotations.*
 import kotlinx.coroutines.experimental.selects.*
-import java.util.concurrent.*
-import java.util.concurrent.locks.*
-import kotlin.concurrent.*
 
 /**
  * Broadcast channel with array buffer of a fixed [capacity].
@@ -40,7 +39,8 @@ class ArrayBroadcastChannel<E>(
      * Buffer capacity.
      */
     val capacity: Int
-) : AbstractSendChannel<E>(), BroadcastChannel<E> {
+) : AbstractSendChannel<E>(),
+    BroadcastChannel<E> {
     init {
         require(capacity >= 1) { "ArrayBroadcastChannel capacity must be at least 1, but $capacity was specified" }
     }
@@ -64,7 +64,7 @@ class ArrayBroadcastChannel<E>(
         So read/writes to buffer need not be volatile
      */
 
-    private val subs = CopyOnWriteArrayList<Subscriber<E>>()
+    private val subs = subscriberList<Subscriber<E>>()
 
     override val isBufferAlwaysFull: Boolean get() = false
     override val isBufferFull: Boolean get() = size >= capacity
@@ -132,7 +132,9 @@ class ArrayBroadcastChannel<E>(
 
     // updates head if needed and optionally adds / removes subscriber under the same lock
     private tailrec fun updateHead(addSub: Subscriber<E>? = null, removeSub: Subscriber<E>? = null) {
-        assert(addSub == null || removeSub == null) // only one of them can be specified
+        // TODO comment ?
+        // assert(addSub == null || removeSub == null) // only one of them can be specified
+
         // update head in a tail rec loop
         var send: Send? = null
         var token: Any? = null
@@ -197,10 +199,12 @@ class ArrayBroadcastChannel<E>(
 
     private class Subscriber<E>(
         private val broadcastChannel: ArrayBroadcastChannel<E>
-    ) : AbstractChannel<E>(), SubscriptionReceiveChannel<E> {
+    ) : AbstractChannel<E>(),
+        SubscriptionReceiveChannel<E> {
         private val subLock = ReentrantLock()
 
-        @Volatile @JvmField
+        @Volatile
+        @JvmField
         var subHead: Long = 0 // guarded by subLock
 
         override val isBufferAlwaysEmpty: Boolean get() = false

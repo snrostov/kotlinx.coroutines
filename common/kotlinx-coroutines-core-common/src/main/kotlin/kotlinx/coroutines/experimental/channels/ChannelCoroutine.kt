@@ -17,6 +17,7 @@
 package kotlinx.coroutines.experimental.channels
 
 import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.selects.*
 import kotlin.coroutines.experimental.*
 
 internal open class ChannelCoroutine<E>(
@@ -26,6 +27,12 @@ internal open class ChannelCoroutine<E>(
 ) : AbstractCoroutine<Unit>(parentContext, active), Channel<E> by _channel {
     val channel: Channel<E>
         get() = this
+
+    override suspend fun receive(): E = _channel.receive()
+
+    override suspend fun send(element: E) = _channel.send(element)
+
+    override suspend fun receiveOrNull(): E? = _channel.receiveOrNull()
 
     override fun cancel(cause: Throwable?): Boolean = super.cancel(cause)
 }

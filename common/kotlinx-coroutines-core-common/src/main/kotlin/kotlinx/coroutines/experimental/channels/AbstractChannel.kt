@@ -18,6 +18,7 @@ package kotlinx.coroutines.experimental.channels
 
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.internal.*
+import kotlinx.coroutines.experimental.internalAnnotations.*
 import kotlinx.coroutines.experimental.intrinsics.*
 import kotlinx.coroutines.experimental.selects.*
 import kotlin.coroutines.experimental.*
@@ -932,6 +933,8 @@ public abstract class AbstractChannel<E> : AbstractSendChannel<E>(), Channel<E> 
         @JvmField val value: E
     )
 }
+
+public const val DEFAULT_CLOSE_MESSAGE = "Channel was closed"
 
 /** @suppress **This is unstable API and it is subject to change.** */
 @JvmField val OFFER_SUCCESS: Any = Symbol("OFFER_SUCCESS")

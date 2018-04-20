@@ -16,8 +16,8 @@
 
 package kotlinx.coroutines.experimental
 
+import kotlinx.coroutines.experimental.internal.Closeable
 import kotlinx.coroutines.experimental.timeunit.TimeUnit
-import java.io.*
 import java.util.concurrent.*
 import kotlin.coroutines.experimental.*
 
